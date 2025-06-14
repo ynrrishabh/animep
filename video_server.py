@@ -25,6 +25,9 @@ HTML = """
     </video>
   {% else %}
     <p class="err">No video source found or failed to extract video URL.</p>
+    {% if error %}
+      <pre class="err">{{ error }}</pre>
+    {% endif %}
   {% endif %}
 </body>
 </html>
@@ -32,36 +35,40 @@ HTML = """
 
 def extract_video_url(ep_url):
     try:
+        print(f"Fetching episode page: {ep_url}")
         headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(ep_url, headers=headers, timeout=10)
+        resp = requests.get(ep_url, headers=headers, timeout=20)
+        print(f"Episode page status: {resp.status_code}")
         if resp.status_code != 200:
-            return None
+            return None, f"Failed to fetch episode page. Status: {resp.status_code}"
         soup = BeautifulSoup(resp.text, "html.parser")
         # Try to find <video> tag with <source>
         video = soup.find("video")
         if video:
             source = video.find("source")
             if source and source.has_attr("src"):
-                return source["src"]
+                return source["src"], None
         # Try to find <iframe> (sometimes used for embedded players)
         iframe = soup.find("iframe")
         if iframe and iframe.has_attr("src"):
-            return iframe["src"]
+            return iframe["src"], None
         # Try to find direct links in scripts or elsewhere (fallback)
         for tag in soup.find_all("a", href=True):
             if tag["href"].endswith(".mp4"):
-                return tag["href"]
-        return None
+                return tag["href"], None
+        return None, "No video source found in episode page."
     except Exception as e:
-        return None
+        print(f"Exception in extract_video_url: {e}")
+        return None, str(e)
 
 @app.route("/play")
 def play():
     ep_url = request.args.get("ep_url", "")
     src = None
+    error = None
     if ep_url:
-        src = extract_video_url(ep_url)
-    return render_template_string(HTML, src=src)
+        src, error = extract_video_url(ep_url)
+    return render_template_string(HTML, src=src, error=error)
 
 @app.route("/ping")
 def ping():
