@@ -13,7 +13,7 @@ def proxy():
     # Inject custom CSS to hide the logo
     custom_css = """
     <style>
-      .custom-logo { display: none !important; }
+      .custom-logo { position: absolute !important; left: -9999px !important; }
     </style>
     """
     html = html.replace("</head>", custom_css + "</head>")
