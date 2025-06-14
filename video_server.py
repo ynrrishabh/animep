@@ -1,12 +1,23 @@
 import requests
 from flask import Flask, request, Response, render_template_string
 import logging
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+def handle_redirects(url, headers):
+    """Handle all redirects and return final URL and content"""
+    session = requests.Session()
+    try:
+        response = session.get(url, headers=headers, allow_redirects=True)
+        return response.url, response.text
+    except Exception as e:
+        logger.error(f"Error handling redirects: {e}")
+        return url, None
 
 @app.route("/proxy")
 def proxy():
@@ -31,12 +42,11 @@ def proxy():
             'Cache-Control': 'max-age=0'
         }
         
-        resp = requests.get(ep_url, headers=headers, allow_redirects=True)
-        logger.info(f"Response status: {resp.status_code}")
-        logger.info(f"Final URL after redirects: {resp.url}")
-        
-        html = resp.text
-        
+        # Get the page content
+        final_url, html = handle_redirects(ep_url, headers)
+        if not html:
+            return "Failed to fetch content", 500
+            
         # Inject custom CSS to hide elements and fix video player
         custom_css = """
         <style>
@@ -92,10 +102,16 @@ def proxy():
         </style>
         """
         
-        # Inject custom JavaScript to handle video player
+        # Inject custom JavaScript to handle server selection and video player
         custom_js = """
         <script>
             window.onload = function() {
+                // Automatically select Server 2
+                var server2 = document.querySelector('.server-btn:nth-child(2)');
+                if (server2) {
+                    server2.click();
+                }
+                
                 // Find video player iframe
                 var playerFrame = document.querySelector('iframe[src*="player"]');
                 if (playerFrame) {
@@ -105,6 +121,22 @@ def proxy():
                     playerFrame.style.top = '0';
                     playerFrame.style.left = '0';
                     playerFrame.style.border = 'none';
+                }
+                
+                // Handle any redirects in the iframe
+                if (playerFrame) {
+                    playerFrame.onload = function() {
+                        try {
+                            // If the iframe content is accessible, handle its redirects
+                            var iframeDoc = playerFrame.contentDocument || playerFrame.contentWindow.document;
+                            var iframeLinks = iframeDoc.getElementsByTagName('a');
+                            for (var i = 0; i < iframeLinks.length; i++) {
+                                iframeLinks[i].target = '_self';
+                            }
+                        } catch (e) {
+                            console.log('Cannot access iframe content due to same-origin policy');
+                        }
+                    };
                 }
             };
         </script>
