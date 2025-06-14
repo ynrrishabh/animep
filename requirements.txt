@@ -1,3 +1,10 @@
-Flask==2.2.5
+Flask
 requests
+python-telegram-bot
+fastapi
+uvicorn
+aiohttp
 beautifulsoup4
+python-dotenv
+httpx
+pydantic
